@@ -1,6 +1,7 @@
 package data
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"github.com/aikwen/greenlight/internal/validator"
@@ -52,7 +53,10 @@ func (m MovieModel) Insert(movie *Movie) error {
 			RETURNING id, created_at, version`
 	args := []interface{}{movie.Title, movie.Year, movie.Runtime, pq.Array(movie.Genres)}
 
-	return m.DB.QueryRow(query, args...).Scan(&movie.ID, &movie.CreateAt, &movie.Version)
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	return m.DB.QueryRowContext(ctx, query, args...).Scan(&movie.ID, &movie.CreateAt, &movie.Version)
 }
 
 // Get method for fetching a specific record
@@ -67,7 +71,12 @@ func (m MovieModel) Get(id int64) (*Movie, error) {
 		WHERE id = $1`
 
 	var movie Movie
-	err := m.DB.QueryRow(query, id).Scan(
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+
+	defer cancel()
+
+	err := m.DB.QueryRowContext(ctx, query, id).Scan(
 		&movie.ID,
 		&movie.CreateAt,
 		&movie.Title,
@@ -76,6 +85,7 @@ func (m MovieModel) Get(id int64) (*Movie, error) {
 		pq.Array(&movie.Genres),
 		&movie.Version,
 	)
+
 	if err != nil {
 		switch {
 		case errors.Is(err, sql.ErrNoRows):
@@ -93,7 +103,7 @@ func (m MovieModel) Update(movie *Movie) error {
 	query := `
 		UPDATE movies
 		SET title = $1, year = $2, runtime = $3, genres = $4, version = version + 1
-		WHERE id = $5
+		WHERE id = $5 ANd version = $6
 		RETURNING version`
 
 	args := []interface{}{
@@ -101,9 +111,23 @@ func (m MovieModel) Update(movie *Movie) error {
 		movie.Year,
 		movie.Runtime,
 		pq.Array(movie.Genres),
-		movie.ID}
+		movie.ID,
+		movie.Version}
 
-	return m.DB.QueryRow(query, args...).Scan(&movie.Version)
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	err := m.DB.QueryRowContext(ctx, query, args...).Scan(&movie.Version)
+	if err != nil {
+		switch {
+		case errors.Is(err, sql.ErrNoRows):
+			return ErrEditConflict
+		default:
+			return err
+		}
+	}
+
+	return nil
 }
 
 // Delete method for deleting a specific record
@@ -115,8 +139,12 @@ func (m MovieModel) Delete(id int64) error {
 	// sql
 	query := `DELETE FROM movies 
        WHERE id = $1`
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
 	// execute the sql query
-	result, err := m.DB.Exec(query, id)
+	result, err := m.DB.ExecContext(ctx, query, id)
 	if err != nil {
 		return err
 	}
