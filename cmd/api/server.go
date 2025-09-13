@@ -44,7 +44,20 @@ func (app *application) serve() error {
 		// 2.error which may happen because of a problem closing
 		// the listeners
 		// 3.context deadline is hit
-		shutdownError <- srv.Shutdown(ctx)
+		err := srv.Shutdown(ctx)
+		if err != nil {
+			shutdownError <- err
+		}
+
+		// log a message to say that we're waiting for any background goroutines to
+		// complete their tasks
+		app.logger.PrintInfo("completing background tasks", map[string]string{
+			"addr": srv.Addr,
+		})
+
+		app.wg.Wait()
+		shutdownError <- nil
+
 	}()
 
 	app.logger.PrintInfo("starting server", map[string]string{
