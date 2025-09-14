@@ -2,6 +2,7 @@ package data
 
 import (
 	"context"
+	"crypto/sha256"
 	"database/sql"
 	"errors"
 	"github.com/aikwen/greenlight/internal/validator"
@@ -19,7 +20,7 @@ type User struct {
 	Name      string    `json:"name"`
 	Email     string    `json:"email"`
 	Password  password  `json:"-"`
-	Activatd  bool      `json:"activated"`
+	Activated bool      `json:"activated"`
 	Version   int       `json:"-"`
 }
 
@@ -88,7 +89,7 @@ func (m UserModel) Insert(user *User) error {
 		VALUES ($1, $2, $3, $4)
 		RETURNING id, created_at, version`
 
-	args := []interface{}{user.Name, user.Email, user.Password.hash, user.Activatd}
+	args := []interface{}{user.Name, user.Email, user.Password.hash, user.Activated}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
@@ -122,7 +123,7 @@ func (m UserModel) GetByEmail(email string) (*User, error) {
 		&user.Name,
 		&user.Email,
 		&user.Password.hash,
-		&user.Activatd,
+		&user.Activated,
 		&user.Version)
 
 	if err != nil {
@@ -148,7 +149,7 @@ func (m UserModel) Update(user *User) error {
 		user.Name,
 		user.Email,
 		user.Password.hash,
-		user.Activatd,
+		user.Activated,
 		user.ID,
 		user.Version}
 
@@ -166,4 +167,50 @@ func (m UserModel) Update(user *User) error {
 		}
 	}
 	return nil
+}
+
+func (m UserModel) GetForToken(tokenScope, tokenPlaintext string) (*User, error) {
+	// Calculate the SHA-256 hash of the plaintext token provided by
+	// the client.
+	// Remember that this returns a byte *array* length 32, not a slice
+	tokenHash := sha256.Sum256([]byte(tokenPlaintext))
+
+	// Set up the SQL query
+	query := `
+		SELECT users.id, users.created_at, users.name, users.email, users.password_hash, users.activated, users.version
+		FROM users
+		INNER JOIN tokens
+		ON users.id = tokens.user_id
+		WHERE tokens.hash = $1
+		AND tokens.scope = $2
+		AND tokens.expiry > $3`
+
+	args := []interface{}{tokenHash[:], tokenScope, time.Now()}
+
+	var user User
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	//
+	err := m.DB.QueryRowContext(ctx, query, args...).Scan(
+		&user.ID,
+		&user.CreatedAt,
+		&user.Name,
+		&user.Email,
+		&user.Password.hash,
+		&user.Activated,
+		&user.Version,
+	)
+
+	if err != nil {
+		switch {
+		case errors.Is(err, sql.ErrNoRows):
+			return nil, ErrRecordNotFound
+		default:
+			return nil, err
+		}
+	}
+
+	return &user, nil
 }
