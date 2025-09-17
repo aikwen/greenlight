@@ -8,6 +8,7 @@ import (
 	"github.com/aikwen/greenlight/internal/jsonlog"
 	"github.com/aikwen/greenlight/internal/mailer"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -40,6 +41,10 @@ type config struct {
 		username string
 		password string
 		sender   string
+	}
+
+	cors struct {
+		trustedOrigins []string
 	}
 }
 
@@ -76,6 +81,12 @@ func main() {
 	flag.StringVar(&cfg.smtp.username, "smtp-username", "f6117226c2dbe3", "SMTP server username")
 	flag.StringVar(&cfg.smtp.password, "smtp-password", "134166dddb6360", "SMTP server password")
 	flag.StringVar(&cfg.smtp.sender, "smtp-sender", "Greenlight <no-replay@greenlight.kwen.net>", "SMTP server sender")
+
+	// trusted origins
+	flag.Func("cors-trusted-origins", "Trusted CORS origins(space separated)", func(val string) error {
+		cfg.cors.trustedOrigins = strings.Fields(val)
+		return nil
+	})
 
 	flag.Parse()
 
