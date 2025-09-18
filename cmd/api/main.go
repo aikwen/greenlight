@@ -65,7 +65,7 @@ func main() {
 	flag.StringVar(&cfg.env, "env", "development", "Environment(dev|staging|production)")
 
 	// dsn
-	flag.StringVar(&cfg.db.dsn, "db-dsn", os.Getenv("GREENLIGHT_DB_DSN"), "PostgreSQL DSN")
+	flag.StringVar(&cfg.db.dsn, "db-dsn", "", "PostgreSQL DSN")
 
 	// connection pool setting
 	flag.IntVar(&cfg.db.maxOpenConns, "db-max-open-conns", 25, "PostgreSQL max open connections")
