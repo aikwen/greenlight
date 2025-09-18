@@ -3,11 +3,13 @@ package main
 import (
 	"context"
 	"database/sql"
+	"expvar"
 	"flag"
 	"github.com/aikwen/greenlight/internal/data"
 	"github.com/aikwen/greenlight/internal/jsonlog"
 	"github.com/aikwen/greenlight/internal/mailer"
 	"os"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -98,6 +100,25 @@ func main() {
 	}
 	defer db.Close()
 	logger.PrintInfo("database connection established", nil)
+
+	// Publish a new "version" variable in the expvar handler
+	// containing our application version number
+	expvar.NewString("version").Set(version)
+
+	// publish the number of activate goroutines
+	expvar.Publish("goroutines", expvar.Func(func() any {
+		return runtime.NumGoroutine()
+	}))
+
+	// publish the database connection pool statistic
+	expvar.Publish("database", expvar.Func(func() any {
+		return db.Stats()
+	}))
+
+	// publish the current Unix timestamp
+	expvar.Publish("timestamp", expvar.Func(func() any {
+		return time.Now().Unix()
+	}))
 
 	// declare application
 	app := &application{
