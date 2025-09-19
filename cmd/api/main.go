@@ -5,9 +5,11 @@ import (
 	"database/sql"
 	"expvar"
 	"flag"
+	"fmt"
 	"github.com/aikwen/greenlight/internal/data"
 	"github.com/aikwen/greenlight/internal/jsonlog"
 	"github.com/aikwen/greenlight/internal/mailer"
+	"github.com/aikwen/greenlight/internal/vcs"
 	"os"
 	"runtime"
 	"strings"
@@ -18,7 +20,9 @@ import (
 )
 
 // application version number
-const version = "1.0.0"
+var (
+	version = vcs.Version()
+)
 
 // configuration settings for application
 type config struct {
@@ -90,7 +94,15 @@ func main() {
 		return nil
 	})
 
+	// Create a new version boolean flag with the default value of false
+	displayVersion := flag.Bool("version", false, "Display version information")
+
 	flag.Parse()
+
+	if *displayVersion {
+		fmt.Printf("version:\t%s\n", version)
+		os.Exit(0)
+	}
 
 	logger := jsonlog.New(os.Stdout, jsonlog.LevelInfo)
 
